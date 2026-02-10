@@ -463,11 +463,10 @@ def process_tool_call(tool_name: str, tool_input: Dict) -> str:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
-def run_agentic_persona_search(topic: str, region: str = "Global", intent: Optional[Dict] = None) -> Dict:
+def run_agentic_persona_search(topic: str, region: str = "Global") -> Dict:
     """
     Run AI agentic persona search with multi-step reasoning.
     RESPECTS REGION FILTERING - CRITICAL FEATURE
-    Uses structured intent if provided to find better matches.
     Returns dict with personas, reasoning chain, and agent steps.
     """
     print("\n" + "="*70)
@@ -487,25 +486,8 @@ def run_agentic_persona_search(topic: str, region: str = "Global", intent: Optio
         chat = model.start_chat()
         
         # Agent prompt - CRITICAL: Emphasize region filtering
-        intent_context = ""
-        if intent:
-             intent_context = f"""
-USER INTENT CONTEXT:
-- GOAL: {intent.get('goal', 'Unknown')}
-- DOMAIN: {intent.get('domain', 'Unknown')}
-- USER STAGE: {intent.get('user_stage', 'Unknown')}
-- DECISION TYPE: {intent.get('decision_type', 'Unknown')}
-
-ADAPTATION STRATEGY:
-- If user is a STUDENT, find mentors who are good at EXPLAINING basics.
-- If user is an EXPERT, find peers who are PIONEERS.
-- Match the DECISION TYPE (e.g. "Career Advice" -> Find successful role models).
-"""
-
         agent_prompt = f"""
 You are an expert persona discovery agent. Your task is to find the BEST expert persona for learning about "{topic}".
-
-{intent_context}
 
 CRITICAL CONSTRAINTS:
 1. USER SELECTED REGION: "{region}"
@@ -565,16 +547,70 @@ Return personas ONLY from {region} unless it's "Global".
             )
         
         # Extract final response
-        final_response = response.candidates[0].content.parts[0].text
-        
+        final_response_text = response.candidates[0].content.parts[0].text
         print(f"\n✅ Agent completed in {iteration} iterations")
-        print(f"📊 Final Response:\n{final_response}")
+        # print(f"📊 Final Response:\n{final_response_text}")
+
+        # TRICK: The agent might output JSON or just text. We need to handle both.
+        # Check if the response is a JSON block
+        import re
+        personas = []
+        try:
+            # Try to find JSON block
+            json_match = re.search(r'```json\s*(\[.*?\])\s*```', final_response_text, re.DOTALL)
+            if json_match:
+                personas = json.loads(json_match.group(1))
+            else:
+                # Try parsing raw list if it looks like JSON
+                try:
+                    personas = json.loads(final_response_text)
+                except:
+                    # Fallback: Parse text manually if it's not JSON
+                    # Look for "1. Name - Description" format
+                    lines = final_response_text.split('\n')
+                    for line in lines:
+                        if re.search(r'^\d+\.', line.strip()) or line.strip().startswith('-'):
+                           # Simple extraction logic
+                           parts = line.split(':', 1)
+                           if len(parts) == 2:
+                               name = re.sub(r'^[\d\-\.\*]+\s*', '', parts[0]).strip()
+                               desc = parts[1].strip()
+                               personas.append({"name": name, "description": desc})
+        except Exception as e:
+            print(f"⚠️ Error parsing agent response: {e}")
+
+        # If we found personas, format them for app.py
+        # app.py expects list of tuples or list of dicts. Let's standardize to list of tuples for now to match simple_agent?
+        # WAIT: app.py code for smart_personas expects:
+        # if smart_personas: st.session_state.personas = smart_personas ...
+        # logic in app.py (lines 208-210) handle 'personas' as list of tuples [(name, desc), ...] OR simple list.
+        # But wait, lines 682: st.session_state.personas = search_result["personas"]
+        # And later in "show_personas" (not shown but assumed), it iterates.
         
+        # Let's ensure we return a list of tuples like simple_agent does: [(Name, Desc), ...]
+        
+        final_personas = []
+        if isinstance(personas, list):
+            for p in personas:
+                if isinstance(p, dict):
+                    final_personas.append((p.get("name", "Unknown"), p.get("description", "Expert")))
+                elif isinstance(p, list) and len(p) >= 2:
+                    final_personas.append((p[0], p[1]))
+                elif isinstance(p, tuple):
+                    final_personas.append(p)
+                    
+        # Fallback if agent failed to produce structured list
+        if not final_personas:
+             # Last ditch: simple_agent logic
+             from simple_agent import run_simple_persona_search
+             final_personas = run_simple_persona_search(topic, region)
+
         return {
             "status": "success",
             "topic": topic,
             "region": region,
-            "response": final_response,
+            "personas": final_personas, # Critical: app.py expects this key
+            "reasoning": final_response_text,
             "agent_steps": agent_steps,
             "iterations": iteration
         }

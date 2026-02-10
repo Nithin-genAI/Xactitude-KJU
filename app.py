@@ -12,7 +12,6 @@ from user_memory import (
     generate_context_from_memory
 )
 from ai_agent import run_agentic_persona_search
-from intent_parser import parse_user_intent
 from simple_agent import run_simple_persona_search
 
 # -- 1. Enhanced Page Configuration --
@@ -658,45 +657,19 @@ if st.session_state.app_stage == "get_topic":
             else:
                 st.session_state.user_topic = topic_input
                 
-                # --- INTENT ANALYSIS ---
-                with st.status("🧠 Analyzing your learning intent...", expanded=True) as status:
-                    st.write("Deconstructing your goal...")
-                    intent_data = parse_user_intent(topic_input)
-                    st.session_state.user_intent = intent_data # Store for agent
-                    
-                    st.write("✅ Intent Detected:")
-                    st.json(intent_data)
-                    
-                    st.write(f"🔍 Searching for experts in {st.session_state.user_region}...")
-                    
-                    # Run search with intent context
-                    if st.session_state.user_region == "Global":
-                         # Pass intent to agent (we will update agent next)
-                        search_result = run_agentic_persona_search(topic_input, region="Global", intent=intent_data)
-                    else:
-                        search_result = run_agentic_persona_search(topic_input, region=st.session_state.user_region, intent=intent_data)
-                    
-                    status.update(label="✅ Guide Found!", state="complete", expanded=False)
-                
-                if search_result.get("status") == "success":
-                    st.session_state.personas = search_result["personas"]
-                    st.session_state.agent_reasoning = search_result.get("reasoning")
-                    st.session_state.app_stage = "show_personas"
-                    st.rerun()
-                else:
-                    st.error("Please try that again. Could you rephrase your topic?")
-                # The original try-except block for find_relevant_personas is replaced by the agentic search logic.
-                # The original code had:
-                # try:
-                #     smart_personas = find_relevant_personas(topic_input, st.session_state.user_region)
-                #     if smart_personas:
-                #         st.session_state.personas = smart_personas
-                #         st.session_state.app_stage = "show_personas"
-                #         st.rerun()
-                #     else:
-                #         st.error("Please try that again. Could you rephrase your topic?")
-                # except Exception as e:
-                #     st.error(f"Connection issue: {e}")
+                # Use smart relevance algorithm with region
+                with st.spinner(f"🔍 Finding perfect guides from {st.session_state.user_region}..."):
+                    try:
+                        smart_personas = find_relevant_personas(topic_input, st.session_state.user_region)
+                        
+                        if smart_personas:
+                            st.session_state.personas = smart_personas
+                            st.session_state.app_stage = "show_personas"
+                            st.rerun()
+                        else:
+                            st.error("Please try that again. Could you rephrase your topic?")
+                    except Exception as e:
+                        st.error(f"Connection issue: {e}")
 
 # --- STAGE 2: Enhanced Persona Selection with Custom Guides ---
 elif st.session_state.app_stage == "show_personas":
