@@ -12,7 +12,6 @@ __pycache__/
 curio.db
 *.db
 !curio_data.db
-chroma_data/
 
 # Environment
 .env
