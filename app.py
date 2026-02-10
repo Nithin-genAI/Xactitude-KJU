@@ -14,13 +14,22 @@ from user_memory import (
 from ai_agent import run_agentic_persona_search
 from simple_agent import run_simple_persona_search
 
-# -- 1. Enhanced Page Configuration --
+# --- APP CONFIGURATION ---
 st.set_page_config(
-    page_title="Curio 2.0: The Dynamic Guide",
+    page_title="Curio 2.0: The Dynamic AI Tutor",
     page_icon="🧠",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # --- 2. Custom CSS for Aesthetic Light Theme ---
 st.markdown("""
@@ -215,7 +224,7 @@ def find_relevant_personas(topic, user_region="Global"):
             return fallback_persona_selection(topic, user_region)
             
     except Exception as e:
-        print(f"AI persona search error: {e}")
+        logging.error(f"AI persona search error: {e}")
         return fallback_persona_selection(topic, user_region)
 
 def fallback_persona_selection(topic, user_region="Global"):
@@ -311,6 +320,19 @@ def get_ai_suggested_experts(topic, user_region="Global"):
     except:
         # Fallback experts
         return [("David Attenborough", "Natural world expert"), ("Neil deGrasse Tyson", "Science communicator"), ("Stephen Hawking", "Theoretical physicist")]
+
+def safe_gemini_chat(chat_session, prompt):
+    """Safely calls Gemini with error handling for quotas."""
+    try:
+        response = chat_session.send_message(prompt)
+        return response.text
+    except Exception as e:
+        error_msg = str(e)
+        if "429" in error_msg or "Quota exceeded" in error_msg:
+            return "⚠️ **System Notice**: My brain is a bit tired (daily quota reached). Please give me a minute or try again later! 🧠💤"
+        else:
+            logger.error(f"Gemini Error: {e}")
+            return f"⚠️ **Connection Issue**: {error_msg[:100]}... Let's try that again."
 
 # --- 5. Enhanced Tutor Prompt with Custom Guide Support ---
 def get_tutor_prompt(persona, topic, level="beginner", is_custom=False, username="Student"):
@@ -417,6 +439,8 @@ if "agent_reasoning" not in st.session_state:
     st.session_state.agent_reasoning = None
 if "user_intent" not in st.session_state:
     st.session_state.user_intent = {}
+if "auto_speech_enabled" not in st.session_state:
+    st.session_state.auto_speech_enabled = True  # Enable by default
 
 # --- LOGIN PAGE ---
 if st.session_state.app_stage == "login":
@@ -505,6 +529,8 @@ with st.sidebar:
             for topic in stats["favorite_topics"][:3]:
                 st.caption(f"• {topic['topic']} ({topic['count']}x)")
                 
+        st.divider()
+        
         st.divider()
         
         # Recent Chats sidebar (Quick access)
@@ -891,7 +917,7 @@ elif st.session_state.app_stage == "run_chat":
                         with st.chat_message("user", avatar="👤"):
                             st.markdown(message["content"])
             
-            # Chat input
+            # --- TEXT CHAT INPUT ---
             if prompt := st.chat_input(f"Chat with {st.session_state.chosen_persona}..."):
                 st.session_state.chat_history.append({"role": "user", "content": prompt})
                 
@@ -901,16 +927,18 @@ elif st.session_state.app_stage == "run_chat":
                 
                 with st.spinner(f"💭 {st.session_state.chosen_persona} is thinking..."):
                     try:
-                        response = st.session_state.chat_session.send_message(prompt)
-                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        # Use safe wrapper instead of direct call
+                        final_text = safe_gemini_chat(st.session_state.chat_session, prompt)
+                        
+                        st.session_state.chat_history.append({"role": "assistant", "content": final_text})
                         
                         # Log assistant message to database
                         if st.session_state.current_session_id:
-                            add_chat_message(st.session_state.current_session_id, "assistant", response.text)
+                            add_chat_message(st.session_state.current_session_id, "assistant", final_text)
                             
                             # Store in ChromaDB for semantic memory (every 3 messages)
-                            if len(st.session_state.chat_history) % 6 == 0:  # Every 3 exchanges
-                                conversation_snippet = f"User asked: {prompt}\nAssistant: {response.text[:200]}"
+                            if len(st.session_state.chat_history) % 6 == 0:
+                                conversation_snippet = f"User asked: {prompt}\nAssistant: {final_text[:200]}"
                                 store_conversation_memory(
                                     user_id=st.session_state.user_id,
                                     topic=st.session_state.user_topic,
@@ -921,6 +949,7 @@ elif st.session_state.app_stage == "run_chat":
                         
                         st.rerun()
                     except Exception as e:
+                        logging.error(f"Error in chat loop: {e}")
                         error_msg = f"⚠️ Let me try that again. Connection issue: {e}"
                         st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
                         st.rerun()

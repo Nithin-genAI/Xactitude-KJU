@@ -3,3 +3,6 @@ google-generativeai
 chromadb
 wikipedia
 watchdog
+google-genai
+scipy
+numpy
