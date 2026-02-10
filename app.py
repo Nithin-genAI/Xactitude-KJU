@@ -259,8 +259,6 @@ def fallback_persona_selection(topic, user_region="Global"):
         for keywords, experts in keyword_matches.items():
             if any(kw in topic_lower for kw in keywords):
                 topic_experts = experts
-                break
-    
     # 3. Add topic experts first
     for expert in topic_experts:
         if expert not in used_names and len(final_personas) < 3:
@@ -578,32 +576,32 @@ if st.session_state.show_dashboard:
             st.divider()
             
             # Recent sessions
-            st.subheader("📚 Recent Learning Sessions")
-            if stats["recent_sessions"]:
-                for session in stats["recent_sessions"]:
-                    with st.expander(f"📖 {session['topic']} with {session['persona']}"):
-                        st.write(f"**Started:** {session['started_at']}")
-                        st.write(f"**Messages:** {session['message_count']}")
-                        
-                        if st.button("Continue Learning →", key=f"resume_{session['session_id']}"):
-                            # Restore session
-                            st.session_state.user_topic = session['topic']
-                            st.session_state.chosen_persona = session['persona']
-                            st.session_state.is_custom_guide = False # Defaulting to false for safety, ideally should store this in DB
-                            st.session_state.session_id = session['session_id']
-                            st.session_state.current_session_id = session['session_id'] # Critical sync
-                            
-                            # Load history
-                            history = get_chat_history(session['session_id'])
-                            st.session_state.chat_history = history
-                            
-                            # Switch to chat
-                            st.session_state.app_stage = "run_chat"
-                            st.session_state.show_dashboard = False # Hide dashboard
-                            st.session_state.tutor_initialized = False # Force re-init of Gemini object
-                            st.rerun()
+            st.subheader("📚 Complete Learning History")
+            
+            # Helper to resume session
+            def resume_session(session_data):
+                st.session_state.user_topic = session_data['topic']
+                st.session_state.chosen_persona = session_data['persona']
+                st.session_state.is_custom_guide = False
+                st.session_state.session_id = session_data['session_id']
+                st.session_state.current_session_id = session_data['session_id']
+                st.session_state.chat_history = get_chat_history(session_data['session_id'])
+                st.session_state.app_stage = "run_chat"
+                st.session_state.show_dashboard = False
+                st.session_state.tutor_initialized = False # Force re-init of Gemini object
+                st.rerun()
+
+            if stats.get("all_sessions"):
+                for session in stats["all_sessions"]:
+                    with st.expander(f"📖 {session['topic']} with {session['persona']} ({session['started_at'][:10]})"):
+                        col_info, col_btn = st.columns([3, 1])
+                        with col_info:
+                            st.caption(f"Started: {session['started_at']} • Messages: {session['message_count']}")
+                        with col_btn:
+                            if st.button("Resume", key=f"resume_{session['session_id']}"):
+                                resume_session(session)
             else:
-                st.info("No sessions yet. Start your learning journey!")
+                st.info("No learning sessions found.")
             
         except Exception as e:
             st.error(f"Error loading dashboard: {e}")

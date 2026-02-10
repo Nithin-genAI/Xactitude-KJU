@@ -343,6 +343,22 @@ def get_user_stats(user_id: str) -> Dict:
             "message_count": row[4]
         } for row in cursor.fetchall()]
         
+        # All sessions (for full history)
+        cursor.execute("""
+            SELECT session_id, topic, persona, started_at, message_count
+            FROM learning_sessions 
+            WHERE user_id = ?
+            ORDER BY started_at DESC
+        """, (user_id,))
+        
+        all_sessions = [{
+            "session_id": row[0],
+            "topic": row[1],
+            "persona": row[2],
+            "started_at": row[3],
+            "message_count": row[4]
+        } for row in cursor.fetchall()]
+        
         conn.close()
         
         print(f"✅ Retrieved stats for user {user_id}")
@@ -351,7 +367,8 @@ def get_user_stats(user_id: str) -> Dict:
             "total_messages": total_messages,
             "favorite_topics": favorite_topics,
             "favorite_personas": favorite_personas,
-            "recent_sessions": recent_sessions
+            "recent_sessions": recent_sessions,
+            "all_sessions": all_sessions
         }
     except Exception as e:
         print(f"❌ Error getting user stats: {e}")
