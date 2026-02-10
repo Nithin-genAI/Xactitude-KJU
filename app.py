@@ -763,6 +763,14 @@ elif st.session_state.app_stage == "run_chat":
                 st.session_state.app_stage = "get_topic"
                 st.rerun()
         
+        # Display Image (Persistent)
+        if st.session_state.get("persona_image"):
+            col_img, col_txt = st.columns([1, 4])
+            with col_img:
+                st.image(st.session_state.persona_image, width=120)
+            with col_txt:
+                st.info(f"**Talking to {st.session_state.chosen_persona}**\n\n*Ask me anything!*")
+
         st.divider()
         
         # Chat area container
@@ -770,6 +778,18 @@ elif st.session_state.app_stage == "run_chat":
         
         # Initialize tutor
         if not st.session_state.tutor_initialized:
+            
+            # --- Fetch Image (if not already fetched) ---
+            if not st.session_state.get("persona_image"):
+                 from persona_scraper import scrape_wikipedia_summary
+                 with st.spinner(f"📸 Fetching photo of {st.session_state.chosen_persona}..."):
+                    wiki_data = scrape_wikipedia_summary(st.session_state.chosen_persona)
+                    if wiki_data and wiki_data.get('image_url'):
+                        st.session_state.persona_image = wiki_data['image_url']
+                        st.rerun() # Rerun to show the image immediately in the persistent block above
+                    else:
+                        st.session_state.persona_image = None
+            
             with st.spinner(f"🔄 Connecting you with {st.session_state.chosen_persona}..."):
                 try:
                     level_map = {"🚀 Beginner": "beginner", "📚 Intermediate": "intermediate", "🎯 Advanced": "advanced"}

@@ -66,8 +66,20 @@ def scrape_wikipedia_summary(persona_name: str) -> Optional[Dict]:
         # Get infobox data (birth, death, occupation, etc.)
         infobox = soup.find('table', class_='infobox')
         key_facts = {}
+        image_url = None
         
         if infobox:
+            # 1. Try to find the image
+            image_tag = infobox.find('img')
+            if image_tag:
+                image_src = image_tag.get('src')
+                if image_src:
+                    if image_src.startswith('//'):
+                        image_url = "https:" + image_src
+                    else:
+                        image_url = image_src
+            
+            # 2. Extract key facts
             rows = infobox.find_all('tr')
             for row in rows:
                 header = row.find('th')
@@ -82,6 +94,7 @@ def scrape_wikipedia_summary(persona_name: str) -> Optional[Dict]:
             "name": persona_name,
             "bio": bio_text.strip(),
             "key_facts": key_facts,
+            "image_url": image_url, # Added field
             "source": "Wikipedia"
         }
         
