@@ -11,7 +11,9 @@ from user_memory import (
     store_conversation_memory, get_relevant_past_conversations,
     generate_context_from_memory
 )
-from simple_agent import smart_persona_search_with_ai
+from ai_agent import run_agentic_persona_search
+from intent_parser import parse_user_intent
+from simple_agent import run_simple_persona_search
 
 # -- 1. Enhanced Page Configuration --
 st.set_page_config(
@@ -205,7 +207,7 @@ def find_relevant_personas(topic, user_region="Global"):
     """
     try:
         # Use AI agent for intelligent persona selection
-        personas = smart_persona_search_with_ai(topic, user_region)
+        personas = run_simple_persona_search(topic, user_region)
         
         if personas and len(personas) >= 3:
             return personas[:3]
@@ -236,23 +238,23 @@ def fallback_persona_selection(topic, user_region="Global"):
     if not topic_experts:
         keyword_matches = {
             # Mental health keywords
-            ["mental", "health", "therapy", "counseling", "psychiatric"]: ["Sigmund Freud", "Carl Jung", "Viktor Frankl"],
-            ["depression", "anxiety", "stress", "trauma"]: ["Aaron Beck", "Martin Seligman", "Bessel van der Kolk"],
-            ["meditation", "mindfulness", "zen", "spiritual"]: ["Dalai Lama", "Jon Kabat-Zinn", "Thich Nhat Hanh"],
+            tuple(["mental", "health", "therapy", "counseling", "psychiatric"]): ["Sigmund Freud", "Carl Jung", "Viktor Frankl"],
+            tuple(["depression", "anxiety", "stress", "trauma"]): ["Aaron Beck", "Martin Seligman", "Bessel van der Kolk"],
+            tuple(["meditation", "mindfulness", "zen", "spiritual"]): ["Dalai Lama", "Jon Kabat-Zinn", "Thich Nhat Hanh"],
             
             # Tech keywords
-            ["programming", "coding", "software", "developer"]: ["Linus Torvalds", "Guido van Rossum", "Dennis Ritchie"],
-            ["ai", "artificial", "intelligence", "machine", "learning"]: ["Geoffrey Hinton", "Yann LeCun", "Andrew Ng"],
+            tuple(["programming", "coding", "software", "developer"]): ["Linus Torvalds", "Guido van Rossum", "Dennis Ritchie"],
+            tuple(["ai", "artificial", "intelligence", "machine", "learning"]): ["Geoffrey Hinton", "Yann LeCun", "Andrew Ng"],
             
             # Science keywords
-            ["physics", "quantum", "relativity", "universe"]: ["Albert Einstein", "Richard Feynman", "Stephen Hawking"],
-            ["biology", "evolution", "genetics", "dna"]: ["Charles Darwin", "James Watson", "Francis Crick"],
-            ["chemistry", "chemical", "molecule", "atom"]: ["Marie Curie", "Linus Pauling", "Dmitri Mendeleev"],
+            tuple(["physics", "quantum", "relativity", "universe"]): ["Albert Einstein", "Richard Feynman", "Stephen Hawking"],
+            tuple(["biology", "evolution", "genetics", "dna"]): ["Charles Darwin", "James Watson", "Francis Crick"],
+            tuple(["chemistry", "chemical", "molecule", "atom"]): ["Marie Curie", "Linus Pauling", "Dmitri Mendeleev"],
             
             # Business keywords
-            ["business", "entrepreneur", "startup", "company"]: ["Peter Drucker", "Steve Jobs", "Warren Buffett"],
-            ["marketing", "sales", "advertising", "brand"]: ["Seth Godin", "Philip Kotler", "Gary Vaynerchuk"],
-            ["leadership", "management", "team", "organization"]: ["Simon Sinek", "Peter Drucker", "Jim Collins"],
+            tuple(["business", "entrepreneur", "startup", "company"]): ["Peter Drucker", "Steve Jobs", "Warren Buffett"],
+            tuple(["marketing", "sales", "advertising", "brand"]): ["Seth Godin", "Philip Kotler", "Gary Vaynerchuk"],
+            tuple(["leadership", "management", "team", "organization"]): ["Simon Sinek", "Peter Drucker", "Jim Collins"],
         }
         
         for keywords, experts in keyword_matches.items():
@@ -416,6 +418,8 @@ if "use_ai_agent" not in st.session_state:
     st.session_state.use_ai_agent = True
 if "agent_reasoning" not in st.session_state:
     st.session_state.agent_reasoning = None
+if "user_intent" not in st.session_state:
+    st.session_state.user_intent = {}
 
 # --- LOGIN PAGE ---
 if st.session_state.app_stage == "login":
@@ -648,21 +652,51 @@ if st.session_state.app_stage == "get_topic":
                 key="level_select"
             )
         
-        if topic_input:
-            st.session_state.user_topic = topic_input
-            with st.spinner(f"🔍 Finding perfect guides from {st.session_state.user_region}..."):
-                try:
-                    # Use our smart relevance algorithm with region
-                    smart_personas = find_relevant_personas(topic_input, st.session_state.user_region)
+        if st.button("Find My Guide 🚀", use_container_width=True):
+            if not topic_input:
+                st.warning("Please enter a topic first!")
+            else:
+                st.session_state.user_topic = topic_input
+                
+                # --- INTENT ANALYSIS ---
+                with st.status("🧠 Analyzing your learning intent...", expanded=True) as status:
+                    st.write("Deconstructing your goal...")
+                    intent_data = parse_user_intent(topic_input)
+                    st.session_state.user_intent = intent_data # Store for agent
                     
-                    if smart_personas:
-                        st.session_state.personas = smart_personas
-                        st.session_state.app_stage = "show_personas"
-                        st.rerun()
+                    st.write("✅ Intent Detected:")
+                    st.json(intent_data)
+                    
+                    st.write(f"🔍 Searching for experts in {st.session_state.user_region}...")
+                    
+                    # Run search with intent context
+                    if st.session_state.user_region == "Global":
+                         # Pass intent to agent (we will update agent next)
+                        search_result = run_agentic_persona_search(topic_input, region="Global", intent=intent_data)
                     else:
-                        st.error("Please try that again. Could you rephrase your topic?")
-                except Exception as e:
-                    st.error(f"Connection issue: {e}")
+                        search_result = run_agentic_persona_search(topic_input, region=st.session_state.user_region, intent=intent_data)
+                    
+                    status.update(label="✅ Guide Found!", state="complete", expanded=False)
+                
+                if search_result.get("status") == "success":
+                    st.session_state.personas = search_result["personas"]
+                    st.session_state.agent_reasoning = search_result.get("reasoning")
+                    st.session_state.app_stage = "show_personas"
+                    st.rerun()
+                else:
+                    st.error("Please try that again. Could you rephrase your topic?")
+                # The original try-except block for find_relevant_personas is replaced by the agentic search logic.
+                # The original code had:
+                # try:
+                #     smart_personas = find_relevant_personas(topic_input, st.session_state.user_region)
+                #     if smart_personas:
+                #         st.session_state.personas = smart_personas
+                #         st.session_state.app_stage = "show_personas"
+                #         st.rerun()
+                #     else:
+                #         st.error("Please try that again. Could you rephrase your topic?")
+                # except Exception as e:
+                #     st.error(f"Connection issue: {e}")
 
 # --- STAGE 2: Enhanced Persona Selection with Custom Guides ---
 elif st.session_state.app_stage == "show_personas":

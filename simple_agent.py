@@ -24,7 +24,7 @@ def get_api_key():
         pass
     return None
 
-def smart_persona_search_with_ai(topic: str, region: str = "Global") -> List[Tuple[str, str]]:
+def run_simple_persona_search(topic: str, region: str = "Global") -> List[Tuple[str, str]]:
     """`
     Directly asks Gemini to find the best experts.
     """

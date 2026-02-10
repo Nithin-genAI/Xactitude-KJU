@@ -463,10 +463,11 @@ def process_tool_call(tool_name: str, tool_input: Dict) -> str:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
 
-def run_agentic_persona_search(topic: str, region: str = "Global") -> Dict:
+def run_agentic_persona_search(topic: str, region: str = "Global", intent: Optional[Dict] = None) -> Dict:
     """
     Run AI agentic persona search with multi-step reasoning.
     RESPECTS REGION FILTERING - CRITICAL FEATURE
+    Uses structured intent if provided to find better matches.
     Returns dict with personas, reasoning chain, and agent steps.
     """
     print("\n" + "="*70)
@@ -486,8 +487,25 @@ def run_agentic_persona_search(topic: str, region: str = "Global") -> Dict:
         chat = model.start_chat()
         
         # Agent prompt - CRITICAL: Emphasize region filtering
+        intent_context = ""
+        if intent:
+             intent_context = f"""
+USER INTENT CONTEXT:
+- GOAL: {intent.get('goal', 'Unknown')}
+- DOMAIN: {intent.get('domain', 'Unknown')}
+- USER STAGE: {intent.get('user_stage', 'Unknown')}
+- DECISION TYPE: {intent.get('decision_type', 'Unknown')}
+
+ADAPTATION STRATEGY:
+- If user is a STUDENT, find mentors who are good at EXPLAINING basics.
+- If user is an EXPERT, find peers who are PIONEERS.
+- Match the DECISION TYPE (e.g. "Career Advice" -> Find successful role models).
+"""
+
         agent_prompt = f"""
 You are an expert persona discovery agent. Your task is to find the BEST expert persona for learning about "{topic}".
+
+{intent_context}
 
 CRITICAL CONSTRAINTS:
 1. USER SELECTED REGION: "{region}"
@@ -541,7 +559,7 @@ Return personas ONLY from {region} unless it's "Global".
             response = chat.send_message(
                 genai.protos.Content(
                     parts=[
-                        genai.protos.Part.from_text(tool_result)
+                        genai.protos.Part(text=tool_result)
                     ]
                 )
             )
@@ -579,7 +597,7 @@ if __name__ == "__main__":
     print("\n\n" + "="*70)
     print("TEST 1: India Regional Search")
     print("="*70)
-    result1 = run_agentic_persona_search("Physics", region="India")
+    result1 = run_agentic_persona_search("Physics", region="India", intent={"goal": "Learn fundamentals", "user_stage": "Student"})
     print(f"\nResult: {result1['response']}\n")
     
     # Test 2: United States search
