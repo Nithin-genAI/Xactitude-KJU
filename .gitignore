@@ -1,0 +1,30 @@
+
+# Python
+__pycache__/
+*.pyc
+
+# Streamlit
+.streamlit/secrets.toml
+.streamlit/
+!/.streamlit/config.toml
+
+# Database
+curio.db
+*.db
+!curio_data.db
+chroma_data/
+
+# Environment
+.env
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Mac
+.DS_Store
+
+# Logs
+*.log
