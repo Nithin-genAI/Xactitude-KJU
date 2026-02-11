@@ -221,3 +221,23 @@ Remember to embody {persona_name}'s authentic expertise and communication style!
         
     except:
         return base_prompt
+
+def get_persona_image_url(persona_name: str) -> str:
+    """
+    Get a robust image URL for the persona.
+    1. Try Wikipedia (high quality)
+    2. Fallback to UI Avatars (reliable, personalized)
+    """
+    try:
+        # 1. Try Wikipedia
+        data = scrape_wikipedia_summary(persona_name)
+        if data and data.get('image_url'):
+            return data['image_url']
+            
+    except Exception as e:
+        print(f"Error fetching image for {persona_name}: {e}")
+        
+    # 2. Fallback to UI Avatars
+    # Generates a nice SVG/PNG with initials
+    clean_name = persona_name.replace(" ", "+")
+    return f"https://ui-avatars.com/api/?name={clean_name}&background=random&size=200&bold=true"

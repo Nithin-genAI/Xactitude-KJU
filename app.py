@@ -6,7 +6,7 @@ from database import (
     get_or_create_user, create_learning_session, add_chat_message,
     end_learning_session, get_user_stats, log_analytics_event, get_chat_history
 )
-from persona_scraper import get_persona_fun_fact, enhance_tutor_prompt_with_context
+from persona_scraper import get_persona_fun_fact, enhance_tutor_prompt_with_context, get_persona_image_url
 from user_memory import (
     store_conversation_memory, get_relevant_past_conversations,
     generate_context_from_memory
@@ -496,8 +496,17 @@ st.caption(f"Welcome back, **{st.session_state.username}**! Ready to learn somet
 
 # Sidebar for user dashboard
 with st.sidebar:
-    st.header(f"👤 {st.session_state.username}")
-    st.caption(st.session_state.user_email)
+    if st.session_state.chosen_persona:
+        with st.container():
+            col1, col2 = st.columns([1, 2])
+            with col1:
+                st.image(get_persona_image_url(st.session_state.chosen_persona), width=80)
+            with col2:
+                st.write(f"**{st.session_state.chosen_persona}**")
+                st.caption(st.session_state.user_region)
+    else:
+        st.header(f"👤 {st.session_state.username}")
+        st.caption(st.session_state.user_email)
     
     st.divider()
     
